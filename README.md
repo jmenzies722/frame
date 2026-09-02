@@ -26,8 +26,9 @@ If Settings already showed Frame as allowed and capture still failed, that grant
 | `⌃⇧⌘2` / Capture | Dim every display. Click one. PNG lands on the clipboard. |
 | `⌃⇧⌘3` / Capture Window | Click a window. Same, clipboard. |
 | `⌃⇧⌘1` | Capture the display under the pointer, no click. |
-| Capture Region… | Drag a rectangle, then edit. |
-| Copied toast | Click it to mark, redact, or frame. |
+| `⌃⇧⌘R` / Capture Region… | Drag a rectangle, then edit. |
+| Copied toast | Drag into Slack or Notes. Space edits. `S` saves. |
+| Hide secrets on copy | On by default. Blurs emails and keys before the clipboard. |
 
 Shortcuts are editable in Settings and do not steal `⌘⇧3` / `⌘⇧4` / `⌘⇧5`.
 

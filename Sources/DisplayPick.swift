@@ -35,7 +35,7 @@ final class DisplayPickController {
             window.level = .screenSaver
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.isReleasedWhenClosed = false
-            let view = DisplayPickView(screen: screen)
+            let view = DisplayPickView(screen: screen, name: Geometry.displayName(for: screen))
             view.onPick = { [weak self] picked in
                 self?.dismiss()
                 self?.finish(.success(picked))
@@ -85,13 +85,15 @@ final class DisplayPickView: NSView {
     var onCancel: (() -> Void)?
 
     private let screen: NSScreen
+    private let name: String
     private var hovered = false
     private var tracking: NSTrackingArea?
     private let chrome: NSHostingView<DisplayPickChrome>
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, name: String) {
         self.screen = screen
-        self.chrome = NSHostingView(rootView: DisplayPickChrome(hovered: false))
+        self.name = name
+        self.chrome = NSHostingView(rootView: DisplayPickChrome(name: name, hovered: false))
         super.init(frame: .zero)
         wantsLayer = true
         chrome.frame = NSRect(x: 0, y: 0, width: 220, height: 44)
@@ -178,23 +180,25 @@ final class DisplayPickView: NSView {
     private func setHovered(_ value: Bool) {
         guard hovered != value else { return }
         hovered = value
-        chrome.rootView = DisplayPickChrome(hovered: value)
+        chrome.rootView = DisplayPickChrome(name: name, hovered: value)
         needsDisplay = true
     }
 }
 
 struct DisplayPickChrome: View {
+    var name: String
     var hovered: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: hovered ? "clipboard" : "display")
-                .font(.system(size: 14, weight: .semibold))
-            Text(hovered ? "Click to copy" : "Click a display")
-                .font(.system(size: 14, weight: .semibold))
+        VStack(spacing: 4) {
+            Text(name)
+                .font(.system(size: 15, weight: .semibold))
+            Text(hovered ? "Click to copy" : "Click this display")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frameGlassCapsule()
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frameGlass(cornerRadius: 16)
     }
 }

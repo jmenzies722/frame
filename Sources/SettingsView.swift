@@ -4,30 +4,33 @@ import SwiftUI
 
 @MainActor
 final class SettingsModel: ObservableObject {
-    @Published var regionChord: String
-    @Published var windowChord: String
-    @Published var displayChord: String
+    @Published var chords: [CaptureHotkey: String] = [:]
     @Published var recording: CaptureHotkey?
     @Published var launchAtLogin: Bool
+    @Published var autoRedact: Bool
     @Published var hasScreenRecording: Bool
     @Published var loginError: String?
+    @Published var bindError: String?
 
     private var monitor: Any?
 
     init() {
-        regionChord = HotkeyCenter.describe(keyCode: Preferences.regionKeyCode, modifiers: Preferences.regionModifiers)
-        windowChord = HotkeyCenter.describe(keyCode: Preferences.windowKeyCode, modifiers: Preferences.windowModifiers)
-        displayChord = HotkeyCenter.describe(keyCode: Preferences.displayKeyCode, modifiers: Preferences.displayModifiers)
         launchAtLogin = LoginItem.isEnabled
+        autoRedact = Preferences.autoRedact
         hasScreenRecording = Permissions.hasScreenRecording()
+        refresh()
     }
 
     func refresh() {
         hasScreenRecording = Permissions.hasScreenRecording()
         launchAtLogin = LoginItem.isEnabled
-        regionChord = HotkeyCenter.describe(keyCode: Preferences.regionKeyCode, modifiers: Preferences.regionModifiers)
-        windowChord = HotkeyCenter.describe(keyCode: Preferences.windowKeyCode, modifiers: Preferences.windowModifiers)
-        displayChord = HotkeyCenter.describe(keyCode: Preferences.displayKeyCode, modifiers: Preferences.displayModifiers)
+        autoRedact = Preferences.autoRedact
+        chords = [
+            .screen: HotkeyCenter.describe(keyCode: Preferences.regionKeyCode, modifiers: Preferences.regionModifiers),
+            .window: HotkeyCenter.describe(keyCode: Preferences.windowKeyCode, modifiers: Preferences.windowModifiers),
+            .display: HotkeyCenter.describe(keyCode: Preferences.displayKeyCode, modifiers: Preferences.displayModifiers),
+            .area: HotkeyCenter.describe(keyCode: Preferences.areaKeyCode, modifiers: Preferences.areaModifiers),
+        ]
     }
 
     func setLogin(_ enabled: Bool) {
@@ -43,6 +46,7 @@ final class SettingsModel: ObservableObject {
 
     func beginRecord(_ hotkey: CaptureHotkey) {
         recording = hotkey
+        bindError = nil
         if monitor == nil {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 self?.handle(event)
@@ -54,6 +58,7 @@ final class SettingsModel: ObservableObject {
     func resetHotkeys() {
         Preferences.resetHotkeys()
         HotkeyCenter.shared.reregister()
+        AppDelegate.shared?.refreshMenu()
         refresh()
     }
 
@@ -72,14 +77,18 @@ final class SettingsModel: ObservableObject {
         }
         let modifiers = HotkeyCenter.carbonModifiers(from: event.modifierFlags)
         let hasPrimary = modifiers & UInt32(cmdKey) != 0 || modifiers & UInt32(controlKey) != 0
-        guard hasPrimary else { return }
+        guard hasPrimary else {
+            bindError = "Add ⌘ or ⌃ so it doesn’t steal typing."
+            return
+        }
         let key = UInt32(event.keyCode)
         if HotkeyCenter.isReservedSystemCapture(keyCode: key, modifiers: modifiers) {
+            bindError = "That’s a system screenshot shortcut. Pick another."
             return
         }
         guard let recording else { return }
         switch recording {
-        case .region:
+        case .screen:
             Preferences.regionKeyCode = key
             Preferences.regionModifiers = modifiers
         case .window:
@@ -88,8 +97,12 @@ final class SettingsModel: ObservableObject {
         case .display:
             Preferences.displayKeyCode = key
             Preferences.displayModifiers = modifiers
+        case .area:
+            Preferences.areaKeyCode = key
+            Preferences.areaModifiers = modifiers
         }
         HotkeyCenter.shared.reregister()
+        AppDelegate.shared?.refreshMenu()
         stopRecording()
         refresh()
     }
@@ -103,10 +116,15 @@ struct SettingsView: View {
             Text("Settings")
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
 
-            section("Capture") {
-                hotkeyRow("Capture", chord: model.regionChord, which: .region)
-                hotkeyRow("Window", chord: model.windowChord, which: .window)
-                hotkeyRow("Display", chord: model.displayChord, which: .display)
+            section("Keyboard shortcuts") {
+                ForEach(CaptureHotkey.allCases, id: \.rawValue) { hotkey in
+                    hotkeyRow(hotkey)
+                }
+                if let bindError = model.bindError {
+                    Text(bindError)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                }
                 HStack {
                     Spacer()
                     Button("Reset shortcuts", action: model.resetHotkeys)
@@ -138,6 +156,16 @@ struct SettingsView: View {
             }
 
             section("General") {
+                Toggle("Hide secrets on copy", isOn: Binding(
+                    get: { model.autoRedact },
+                    set: {
+                        Preferences.autoRedact = $0
+                        model.autoRedact = $0
+                    }
+                ))
+                Text("Blur emails and key-shaped strings before the clipboard. Stays on this Mac. Space after copy opens the editor if you need to undo.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                 Toggle("Launch at login", isOn: Binding(
                     get: { model.launchAtLogin },
                     set: { model.setLogin($0) }
@@ -150,7 +178,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(width: 460)
+        .frame(width: 480)
         .frameGlass(cornerRadius: 24)
         .onAppear { model.refresh() }
         .onDisappear { model.stopRecording() }
@@ -160,21 +188,31 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.swiftMuted)
+                .foregroundStyle(.secondary)
             content()
         }
     }
 
-    private func hotkeyRow(_ title: String, chord: String, which: CaptureHotkey) -> some View {
-        HStack {
-            Text(title)
-                .frame(width: 72, alignment: .leading)
-            Text(model.recording == which ? "Press a shortcut…" : chord)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-            Spacer()
-            Button(model.recording == which ? "Listening" : "Change…") {
-                model.beginRecord(which)
+    private func hotkeyRow(_ hotkey: CaptureHotkey) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hotkey.title)
+                Text(hotkey.detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                model.beginRecord(hotkey)
+            } label: {
+                Text(model.recording == hotkey ? "Press keys…" : (model.chords[hotkey] ?? ""))
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frameGlass(cornerRadius: 8)
+            }
+            .buttonStyle(.plain)
+            .help("Click, then press the shortcut")
         }
     }
 }

@@ -94,7 +94,13 @@ final class CaptureCoordinator {
         regionOverlay = overlay
         let picked = try await overlay.choose(shots: shots)
         regionOverlay = nil
-        EditorController.shared.present(bitmap: picked)
+        let marks: [Annotation]
+        if Preferences.autoRedact, case .hidden(let found) = RedactService.scan(picked.image) {
+            marks = found
+        } else {
+            marks = []
+        }
+        EditorController.shared.present(bitmap: picked, annotations: marks)
     }
 
     private func runWindow() async throws {
@@ -119,9 +125,40 @@ final class CaptureCoordinator {
     }
 
     private func finishToClipboard(_ bitmap: CaptureBitmap) {
-        Export.copy(bitmap, annotations: [], framed: false)
-        HistoryStore.shared.add(image: bitmap.image, scale: bitmap.scale)
-        ToastHUD.showCopied(bitmap)
+        guard Preferences.autoRedact else {
+            copyAndToast(bitmap, original: bitmap, redactions: [])
+            return
+        }
+        switch RedactService.scan(bitmap.image) {
+        case .clean:
+            copyAndToast(bitmap, original: bitmap, redactions: [])
+        case .hidden(let marks):
+            guard let baked = FrameRenderer.tryRender(
+                base: bitmap.image,
+                annotations: marks,
+                framed: false
+            ) else {
+                ToastHUD.showScanFailed(bitmap)
+                return
+            }
+            copyAndToast(
+                CaptureBitmap(image: baked, scale: bitmap.scale),
+                original: bitmap,
+                redactions: marks
+            )
+        case .failed:
+            ToastHUD.showScanFailed(bitmap)
+        }
+    }
+
+    private func copyAndToast(
+        _ outgoing: CaptureBitmap,
+        original: CaptureBitmap,
+        redactions: [Annotation]
+    ) {
+        Export.copy(outgoing, annotations: [], framed: false)
+        HistoryStore.shared.add(image: outgoing.image, scale: outgoing.scale)
+        ToastHUD.showCopied(outgoing, original: original, redactions: redactions)
     }
 
     private func present(_ error: Error) {

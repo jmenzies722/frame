@@ -136,8 +136,9 @@ struct EditorView: View {
             .keyboardShortcut("c", modifiers: .command)
 
             Button("Copy & Close") {
-                state.copyToClipboard()
-                onClose()
+                if state.copyToClipboard() {
+                    onClose()
+                }
             }
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)

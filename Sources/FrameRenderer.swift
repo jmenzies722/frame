@@ -26,50 +26,54 @@ enum FrameRenderer {
     }
 
     static func render(base: CGImage, annotations: [Annotation], framed: Bool) -> CGImage {
+        tryRender(base: base, annotations: annotations, framed: framed)
+            ?? (framed ? frame(base) : base)
+    }
+
+    static func tryRender(base: CGImage, annotations: [Annotation], framed: Bool) -> CGImage? {
+        if annotations.isEmpty {
+            return framed ? frame(base) : base
+        }
         let annotated = annotate(base: base, annotations: annotations)
+        if annotated === base { return nil }
         return framed ? frame(annotated) : annotated
     }
 
     static func annotate(base: CGImage, annotations: [Annotation]) -> CGImage {
-        let width = base.width
-        let height = base.height
-        guard let ctx = bitmap(width: width, height: height) else { return base }
-        AnnotationDraw.render(annotations, over: base, in: ctx)
-        return ctx.makeImage() ?? base
+        guard !annotations.isEmpty else { return base }
+        let size = NSSize(width: base.width, height: base.height)
+        return ShotDrawing.rasterize(size: size) { rect in
+            ShotDrawing.draw(base, in: rect)
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            AnnotationDraw.render(annotations, over: base, in: ctx)
+            return true
+        } ?? base
     }
 
     static func frame(_ image: CGImage) -> CGImage {
         let layout = layout(for: image)
-        let width = Int(layout.output.width)
-        let height = Int(layout.output.height)
-        guard let ctx = bitmap(width: width, height: height) else { return image }
+        return ShotDrawing.rasterize(size: layout.output) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            fillBackground(in: ctx, rect: rect)
 
-        ctx.translateBy(x: 0, y: CGFloat(height))
-        ctx.scaleBy(x: 1, y: -1)
+            let card = layout.card
+            let plate = NSBezierPath(roundedRect: card, xRadius: layout.radius, yRadius: layout.radius)
+            ctx.saveGState()
+            ctx.setShadow(
+                offset: CGSize(width: 0, height: layout.shadow * 0.25),
+                blur: layout.shadow,
+                color: NSColor.black.withAlphaComponent(0.45).cgColor
+            )
+            NSColor.black.setFill()
+            plate.fill()
+            ctx.restoreGState()
 
-        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        fillBackground(in: ctx, rect: bounds)
-
-        let card = layout.card
-        ctx.saveGState()
-        ctx.setShadow(
-            offset: CGSize(width: 0, height: layout.shadow * 0.25),
-            blur: layout.shadow,
-            color: NSColor.black.withAlphaComponent(0.45).cgColor
-        )
-        let plate = CGPath(roundedRect: card, cornerWidth: layout.radius, cornerHeight: layout.radius, transform: nil)
-        ctx.addPath(plate)
-        ctx.setFillColor(NSColor.black.cgColor)
-        ctx.fillPath()
-        ctx.restoreGState()
-
-        ctx.saveGState()
-        ctx.addPath(plate)
-        ctx.clip()
-        ctx.draw(image, in: card)
-        ctx.restoreGState()
-
-        return ctx.makeImage() ?? image
+            ctx.saveGState()
+            plate.addClip()
+            ShotDrawing.draw(image, in: card)
+            ctx.restoreGState()
+            return true
+        } ?? image
     }
 
     private static func fillBackground(in ctx: CGContext, rect: CGRect) {
@@ -85,19 +89,6 @@ enum FrameRenderer {
             start: CGPoint(x: rect.midX, y: rect.minY),
             end: CGPoint(x: rect.midX, y: rect.maxY),
             options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-        )
-    }
-
-    static func bitmap(width: Int, height: Int) -> CGContext? {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        return CGContext(
-            data: nil,
-            width: max(1, width),
-            height: max(1, height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )
     }
 }

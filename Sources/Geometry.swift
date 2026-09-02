@@ -21,6 +21,16 @@ enum Geometry {
         return content.displays.first { $0.displayID == id }
     }
 
+    static func displayName(for screen: NSScreen) -> String {
+        let name = screen.localizedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { return name }
+        if let id = displayID(of: screen),
+           let index = NSScreen.screens.firstIndex(where: { displayID(of: $0) == id }) {
+            return index == 0 ? "Built-in" : "Display \(index + 1)"
+        }
+        return "Display"
+    }
+
     static func displayUnderPointer(in content: SCShareableContent) -> SCDisplay? {
         let screen = screen(containing: NSEvent.mouseLocation)
         if let screen, let match = display(in: content, matching: screen) {

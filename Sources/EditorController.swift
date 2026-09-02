@@ -8,9 +8,9 @@ final class EditorController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var state: EditorState?
 
-    func present(bitmap: CaptureBitmap, historyBaked: Bool = false) {
+    func present(bitmap: CaptureBitmap, historyBaked: Bool = false, annotations: [Annotation] = []) {
         window?.close()
-        let state = EditorState(bitmap: bitmap, historyBaked: historyBaked)
+        let state = EditorState(bitmap: bitmap, historyBaked: historyBaked, annotations: annotations)
         self.state = state
         let root = EditorView(state: state) { [weak self] in
             self?.window?.close()

@@ -5,9 +5,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
 
     private var statusItem: NSStatusItem?
-    private var regionItem: NSMenuItem?
+    private var screenItem: NSMenuItem?
     private var windowItem: NSMenuItem?
     private var displayItem: NSMenuItem?
+    private var areaItem: NSMenuItem?
     private var permissionItem: NSMenuItem?
     private var historyMenu: NSMenu?
 
@@ -25,9 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func refreshMenu() {
         let allowed = Permissions.hasScreenRecording()
         permissionItem?.isHidden = allowed
-        regionItem?.isEnabled = true
-        windowItem?.isEnabled = true
-        displayItem?.isEnabled = true
+        apply(screenItem, key: Preferences.regionKeyCode, modifiers: Preferences.regionModifiers)
+        apply(windowItem, key: Preferences.windowKeyCode, modifiers: Preferences.windowModifiers)
+        apply(displayItem, key: Preferences.displayKeyCode, modifiers: Preferences.displayModifiers)
+        apply(areaItem, key: Preferences.areaKeyCode, modifiers: Preferences.areaModifiers)
         rebuildHistory()
         statusItem?.button?.toolTip = allowed
             ? "\(ProductIdentity.displayName) — click a display to copy"
@@ -58,21 +60,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(permission)
 
         let capture = NSMenuItem(title: "Capture", action: #selector(captureScreen), keyEquivalent: "2")
-        capture.keyEquivalentModifierMask = [.control, .shift, .command]
-        regionItem = capture
+        screenItem = capture
         menu.addItem(capture)
 
         let window = NSMenuItem(title: "Capture Window", action: #selector(captureWindow), keyEquivalent: "3")
-        window.keyEquivalentModifierMask = [.control, .shift, .command]
         windowItem = window
         menu.addItem(window)
 
         let display = NSMenuItem(title: "Capture Display Under Pointer", action: #selector(captureDisplay), keyEquivalent: "1")
-        display.keyEquivalentModifierMask = [.control, .shift, .command]
         displayItem = display
         menu.addItem(display)
 
-        let region = NSMenuItem(title: "Capture Region…", action: #selector(captureRegion), keyEquivalent: "")
+        let region = NSMenuItem(title: "Capture Region…", action: #selector(captureRegion), keyEquivalent: "r")
+        areaItem = region
         menu.addItem(region)
 
         menu.addItem(.separator())
@@ -143,6 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func clearHistory() {
         HistoryStore.shared.clear()
         refreshMenu()
+    }
+
+    private func apply(_ item: NSMenuItem?, key: UInt32, modifiers: UInt32) {
+        item?.isEnabled = true
+        item?.keyEquivalent = HotkeyCenter.menuEquivalent(keyCode: key)
+        item?.keyEquivalentModifierMask = HotkeyCenter.cocoaModifiers(from: modifiers)
     }
 
     private func installEditMenu() {

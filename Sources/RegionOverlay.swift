@@ -174,25 +174,25 @@ final class RegionOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        ctx.saveGState()
-        ctx.draw(bitmap.image, in: bounds)
-        ctx.setFillColor(NSColor.black.withAlphaComponent(0.48).cgColor)
-        ctx.fill(bounds)
+        ShotDrawing.draw(bitmap.image, in: bounds)
+        NSColor.black.withAlphaComponent(0.48).setFill()
+        bounds.fill()
 
         if let selection, selection.width > 1, selection.height > 1 {
-            ctx.saveGState()
-            ctx.clip(to: selection)
-            ctx.draw(bitmap.image, in: bounds)
-            ctx.restoreGState()
-            ctx.setStrokeColor(NSColor.white.cgColor)
-            ctx.setLineWidth(2)
-            ctx.stroke(selection.insetBy(dx: 1, dy: 1))
-            drawBadge(for: selection, in: ctx)
-        } else if let current {
+            NSGraphicsContext.current?.cgContext.saveGState()
+            NSGraphicsContext.current?.cgContext.clip(to: selection)
+            ShotDrawing.draw(bitmap.image, in: bounds)
+            NSGraphicsContext.current?.cgContext.restoreGState()
+            NSColor.white.setStroke()
+            let stroke = NSBezierPath(rect: selection.insetBy(dx: 1, dy: 1))
+            stroke.lineWidth = 2
+            stroke.stroke()
+            if let ctx = NSGraphicsContext.current?.cgContext {
+                drawBadge(for: selection, in: ctx)
+            }
+        } else if let current, let ctx = NSGraphicsContext.current?.cgContext {
             drawCrosshair(at: current, in: ctx)
         }
-        ctx.restoreGState()
     }
 
     private var selection: CGRect? {

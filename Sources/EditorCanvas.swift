@@ -46,8 +46,7 @@ final class CanvasView: NSView {
         let image = state.rendered
         let fitted = fittedRect(for: image)
         NSGraphicsContext.current?.imageInterpolation = .high
-        let ns = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
-        ns.draw(in: fitted)
+        ShotDrawing.draw(image, in: fitted)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -122,8 +121,9 @@ final class CanvasView: NSView {
             return true
         }
         if flags == [.command], event.keyCode == 36 {
-            coordinator?.state.copyToClipboard()
-            window?.close()
+            if coordinator?.state.copyToClipboard() == true {
+                window?.close()
+            }
             return true
         }
         return super.performKeyEquivalent(with: event)

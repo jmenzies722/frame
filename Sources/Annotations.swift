@@ -53,14 +53,9 @@ enum AnnotationDraw {
         over image: CGImage,
         in ctx: CGContext
     ) {
-        ctx.saveGState()
-        ctx.translateBy(x: 0, y: CGFloat(image.height))
-        ctx.scaleBy(x: 1, y: -1)
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         for annotation in annotations {
             draw(annotation, image: image, in: ctx)
         }
-        ctx.restoreGState()
     }
 
     private static func draw(_ annotation: Annotation, image: CGImage, in ctx: CGContext) {

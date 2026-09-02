@@ -2,6 +2,22 @@ import CoreGraphics
 import Vision
 
 enum RedactService {
+    enum Scan {
+        case clean
+        case hidden([Annotation])
+        case failed
+    }
+
+    static func scan(_ image: CGImage) -> Scan {
+        do {
+            let rects = try secretRects(in: image)
+            if rects.isEmpty { return .clean }
+            return .hidden(rects.map { Annotation(kind: .blur($0), swatch: .white) })
+        } catch {
+            return .failed
+        }
+    }
+
     static func secretRects(in image: CGImage) throws -> [CGRect] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate

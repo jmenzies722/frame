@@ -23,16 +23,36 @@ private func frameHotkeyCallback(
         case 1: CaptureCoordinator.shared.captureScreen()
         case 2: CaptureCoordinator.shared.captureWindow()
         case 3: CaptureCoordinator.shared.captureDisplay()
+        case 4: CaptureCoordinator.shared.captureRegion()
         default: break
         }
     }
     return noErr
 }
 
-enum CaptureHotkey: UInt32 {
-    case region = 1
+enum CaptureHotkey: UInt32, CaseIterable {
+    case screen = 1
     case window = 2
     case display = 3
+    case area = 4
+
+    var title: String {
+        switch self {
+        case .screen: return "Capture"
+        case .window: return "Window"
+        case .area: return "Region"
+        case .display: return "Display"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .screen: return "Click a display, copy"
+        case .window: return "Click a window, copy"
+        case .area: return "Drag a rectangle, edit"
+        case .display: return "Display under pointer, copy"
+        }
+    }
 }
 
 final class HotkeyCenter {
@@ -40,7 +60,7 @@ final class HotkeyCenter {
     static let signature = OSType(0x4652414D) // "FRAM"
 
     private var handler: EventHandlerRef?
-    private var refs: [EventHotKeyRef?] = [nil, nil, nil]
+    private var refs: [EventHotKeyRef?] = [nil, nil, nil, nil]
 
     private init() {}
 
@@ -59,6 +79,7 @@ final class HotkeyCenter {
         refs[0] = register(key: Preferences.regionKeyCode, modifiers: Preferences.regionModifiers, id: 1)
         refs[1] = register(key: Preferences.windowKeyCode, modifiers: Preferences.windowModifiers, id: 2)
         refs[2] = register(key: Preferences.displayKeyCode, modifiers: Preferences.displayModifiers, id: 3)
+        refs[3] = register(key: Preferences.areaKeyCode, modifiers: Preferences.areaModifiers, id: 4)
     }
 
     private func installHandler() {
@@ -176,6 +197,26 @@ final class HotkeyCenter {
         case kVK_Escape: return "⎋"
         case kVK_Delete: return "⌫"
         default: return String(format: "key %d", code)
+        }
+    }
+
+    static func cocoaModifiers(from carbon: UInt32) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if carbon & UInt32(controlKey) != 0 { flags.insert(.control) }
+        if carbon & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if carbon & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        if carbon & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        return flags
+    }
+
+    static func menuEquivalent(keyCode: UInt32) -> String {
+        let name = keyName(keyCode)
+        if name.count == 1 { return name.lowercased() }
+        switch name {
+        case "↩": return "\r"
+        case "Space": return " "
+        case "⇥": return "\t"
+        default: return ""
         }
     }
 }

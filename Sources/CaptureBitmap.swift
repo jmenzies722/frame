@@ -17,9 +17,7 @@ struct CaptureBitmap {
     }
 
     func nsImage() -> NSImage {
-        let image = NSImage(size: pointSize)
-        image.addRepresentation(NSBitmapImageRep(cgImage: self.image))
-        return image
+        Export.nsImage(image, scale: scale)
     }
 
     func cropped(to pixelRect: CGRect) -> CaptureBitmap? {

@@ -20,10 +20,14 @@ final class EditorState: ObservableObject {
     private var redoStack: [[Annotation]] = []
     private var toastWork: DispatchWorkItem?
 
-    init(bitmap: CaptureBitmap, historyBaked: Bool) {
+    init(bitmap: CaptureBitmap, historyBaked: Bool, annotations: [Annotation] = []) {
         self.bitmap = bitmap
         self.historyBaked = historyBaked
+        self.annotations = annotations
         self.frameEnabled = historyBaked ? false : Preferences.frameEnabled
+        if !annotations.isEmpty {
+            undoStack = [[]]
+        }
     }
 
     var working: [Annotation] {
@@ -88,10 +92,49 @@ final class EditorState: ObservableObject {
         }
     }
 
-    func copyToClipboard() {
+    @discardableResult
+    func copyToClipboard() -> Bool {
+        if Preferences.autoRedact {
+            switch RedactService.scan(bitmap.image) {
+            case .clean:
+                break
+            case .hidden(let found):
+                let extras = found.filter { candidate in
+                    guard case .blur(let next) = candidate.kind else { return true }
+                    return !annotations.contains { existing in
+                        guard case .blur(let have) = existing.kind else { return false }
+                        return have.intersects(next)
+                    }
+                }
+                if !extras.isEmpty {
+                    pushUndo()
+                    annotations.append(contentsOf: extras)
+                    redoStack.removeAll()
+                }
+            case .failed:
+                flash("Couldn't scan for secrets")
+                return false
+            }
+        }
+        if let image = FrameRenderer.tryRender(
+            base: bitmap.image,
+            annotations: annotations,
+            framed: frameEnabled
+        ) {
+            Export.copy(image, scale: bitmap.scale)
+            rememberExport()
+            flash("Copied")
+            return true
+        }
+        if Preferences.autoRedact,
+           annotations.contains(where: { if case .blur = $0.kind { return true }; return false }) {
+            flash("Couldn't hide secrets")
+            return false
+        }
         Export.copy(bitmap, annotations: annotations, framed: frameEnabled)
         rememberExport()
         flash("Copied")
+        return true
     }
 
     func saveToDisk() {
